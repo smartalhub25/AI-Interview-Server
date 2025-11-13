@@ -11,6 +11,13 @@ if (!OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY is not set");
 }
 
+const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY;
+if (!HEYGEN_API_KEY) {
+  console.warn(
+    "⚠️ HEYGEN_API_KEY is not set – /api/heygen-token will fail until you add it to .env"
+  );
+}
+
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
@@ -54,6 +61,49 @@ Rules:
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to create client secret" });
+  }
+});
+
+// POST /api/heygen-token – creates a HeyGen streaming session token
+app.post("/api/heygen-token", async (_req, res) => {
+  try {
+    if (!HEYGEN_API_KEY) {
+      return res
+        .status(500)
+        .json({ error: "HEYGEN_API_KEY is not configured on the server" });
+    }
+
+    const response = await fetch(
+      "https://api.heygen.com/v1/streaming.create_token",
+      {
+        method: "POST",
+        headers: {
+          "x-api-key": HEYGEN_API_KEY,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("HeyGen create_token error:", text);
+      return res
+        .status(500)
+        .json({ error: "Failed to create HeyGen session token" });
+    }
+
+    const { data } = (await response.json()) as { data?: { token?: string } };
+
+    if (!data?.token) {
+      console.error("Unexpected HeyGen token response:", data);
+      return res
+        .status(500)
+        .json({ error: "Invalid HeyGen token response from API" });
+    }
+
+    res.json({ token: data.token });
+  } catch (err) {
+    console.error("Error in /api/heygen-token:", err);
+    res.status(500).json({ error: "Failed to create HeyGen token" });
   }
 });
 
